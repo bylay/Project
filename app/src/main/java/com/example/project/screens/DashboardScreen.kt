@@ -15,19 +15,64 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Today
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.project.Navigator.AppScreen
+import com.example.project.ParkingDatabase
 
 @Composable
-fun DashboardScreen(navController: NavController, usuario: String) {
+fun DashboardScreen(navController: NavController, emailUsuario: String) {
+
+    val context = LocalContext.current
+    val db = remember { ParkingDatabase.getDatabase(context) }
+
+    // estado para que se guarde el nombre del usuario que viene de la bd
+    var nombreUsuario by remember { mutableStateOf("Cargando...") }
+
+    // recordatorio
+    var textoTituloRecordatorio by remember { mutableStateOf("Buscando horarios...") }
+    var textoDetalleRecordatorio by remember { mutableStateOf("...") }
+
+    LaunchedEffect(emailUsuario) {
+        val nombre = db.dao().getUsuario(emailUsuario)
+        if (nombre != null) {
+            nombreUsuario = nombre
+        }
+
+        val horarios = db.dao().getUserHorarios(emailUsuario)
+
+        val horarioActivo = horarios.find { it.activo }
+
+        // si hay
+        if (horarioActivo != null) {
+            textoTituloRecordatorio = "Horario Activo: ${horarioActivo.nombre}"
+            textoDetalleRecordatorio = "Apertura: ${horarioActivo.apertura} - Cierre: ${horarioActivo.cierre}"
+        }
+        // hay pero apagados
+        else if (horarios.isNotEmpty()) {
+            textoTituloRecordatorio = "Sin horarios activos"
+            textoDetalleRecordatorio = "Activa tus horarios en la configuración."
+        }
+        // no hay ninguno
+        else {
+            textoTituloRecordatorio = "Configura tu Parking"
+            textoDetalleRecordatorio = "Aún no tienes horarios definidos."
+        }
+    }
+
     Scaffold(
         containerColor = Color(0xFF0F111A),
         topBar = {
@@ -69,7 +114,7 @@ fun DashboardScreen(navController: NavController, usuario: String) {
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Bienvenido, $usuario",
+                text = "Bienvenido, $nombreUsuario",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
@@ -102,14 +147,14 @@ fun DashboardScreen(navController: NavController, usuario: String) {
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(
-                            text = "Recordatorio",
+                            text = textoTituloRecordatorio,
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Horario de apertura activo de 08:00 a 18:00.",
+                            text = textoDetalleRecordatorio,
                             color = Color.LightGray,
                             fontSize = 14.sp,
                             lineHeight = 20.sp
@@ -129,7 +174,7 @@ fun DashboardScreen(navController: NavController, usuario: String) {
                     subtitle = "Control manual",
                     icon = Icons.Rounded.DirectionsCar,
                     modifier = Modifier.weight(1f),
-                    onClick = { navController.navigate(AppScreen.BloquearBarrera.route) }
+                    onClick = { navController.navigate(AppScreen.BloquearBarrera.crearRuta(emailUsuario)) }
                 )
 
 
@@ -138,7 +183,7 @@ fun DashboardScreen(navController: NavController, usuario: String) {
                     subtitle = "Define los horarios de acceso",
                     icon = Icons.Rounded.Today,
                     modifier = Modifier.weight(1f),
-                    onClick = { navController.navigate(AppScreen.Horarios.route) }
+                    onClick = { navController.navigate(AppScreen.Horarios.crearRuta(emailUsuario)) }
                 )
             }
 

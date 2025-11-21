@@ -31,17 +31,23 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.project.Navigator.AppScreen
+import com.example.project.ParkingDatabase
+import com.example.project.UsuarioEntity
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(navController: NavController) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
-    // Estados del formulario
+    val db = remember { ParkingDatabase.getDatabase(context) }
+
+    // estados
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var nombre by remember { mutableStateOf("") } // Nuevo campo para registro
+    var nombre by remember { mutableStateOf("") }
 
-    // Estado para controlar si estamos en Login o Registro
+    // esto es para saber si estoy en el login o en el register
     var isRegistering by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -55,7 +61,7 @@ fun LoginScreen(navController: NavController) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // --- LOGO ---
+            // logo
             Surface(
                 shape = MaterialTheme.shapes.medium,
                 color = Color(0xFF1E2A45),
@@ -68,7 +74,6 @@ fun LoginScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- TÍTULOS DINÁMICOS ---
             Text(
                 text = if (isRegistering) "Crear Cuenta" else "Bienvenido de Nuevo",
                 fontSize = 24.sp, color = Color.White, style = MaterialTheme.typography.titleLarge
@@ -81,7 +86,7 @@ fun LoginScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // --- CAMPO NOMBRE (Solo visible en Registro) ---
+            // esto sale en el register
             if (isRegistering) {
                 OutlinedTextField(
                     value = nombre,
@@ -95,7 +100,7 @@ fun LoginScreen(navController: NavController) {
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // --- CAMPO EMAIL ---
+            // esto sale en el register
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
@@ -109,7 +114,7 @@ fun LoginScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- CAMPO PASSWORD ---
+            // esto sale en el register
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
@@ -122,7 +127,7 @@ fun LoginScreen(navController: NavController) {
                 shape = MaterialTheme.shapes.medium
             )
 
-            // Olvidaste contraseña (Solo en Login)
+            // olvidaste la contraseña (no hace nada)
             if (!isRegistering) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                     TextButton(onClick = { }) {
@@ -130,37 +135,39 @@ fun LoginScreen(navController: NavController) {
                     }
                 }
             } else {
-                Spacer(modifier = Modifier.height(16.dp)) // Espacio extra en registro
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- BOTÓN DE ACCIÓN (Login o Registro) ---
+            // boton login, register
             Button(
                 onClick = {
                     if (isRegistering) {
-                        // LÓGICA DE REGISTRO
                         if (nombre.isNotEmpty() && email.isNotEmpty() && password.isNotEmpty()) {
-                            val success = UsuariosData.register(Usuario(nombre, email, password))
-                            if (success) {
-                                Toast.makeText(context, "Registro exitoso. ¡Inicia sesión!", Toast.LENGTH_SHORT).show()
-                                isRegistering = false // Volver a pantalla de login
-                            } else {
-                                Toast.makeText(context, "El correo ya está registrado.", Toast.LENGTH_SHORT).show()
+                            scope.launch {
+                                try {
+                                    val newUser = UsuarioEntity(email, nombre, password)
+                                    db.dao().registerUser(newUser)
+                                    Toast.makeText(context, "Registro guardado en SQLite", Toast.LENGTH_SHORT).show()
+                                    isRegistering = false
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Error: El correo ya existe", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         } else {
-                            Toast.makeText(context, "Completa todos los campos", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Completa los campos", Toast.LENGTH_SHORT).show()
                         }
                     } else {
-                        // LÓGICA DE LOGIN
-                        val user = UsuariosData.login(email, password)
-                        if (user != null) {
-                            // Navegar al Dashboard pasando el nombre real
-                            navController.navigate(AppScreen.Dashboard.crearRuta(user.nombre)) {
-                                popUpTo(AppScreen.Login.route) { inclusive = true }
+                        scope.launch {
+                            val user = db.dao().login(email, password)
+                            if (user != null) {
+                                navController.navigate(AppScreen.Dashboard.crearRuta(user.email)) {
+                                    popUpTo(AppScreen.Login.route) { inclusive = true }
+                                }
+                            } else {
+                                Toast.makeText(context, "Credenciales incorrectas", Toast.LENGTH_SHORT).show()
                             }
-                        } else {
-                            Toast.makeText(context, "Credenciales incorrectas", Toast.LENGTH_SHORT).show()
                         }
                     }
                 },
@@ -173,7 +180,6 @@ fun LoginScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- CAMBIAR MODO (Texto inferior) ---
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = if (isRegistering) "¿Ya tienes cuenta? " else "¿No tienes una cuenta? ",
@@ -185,7 +191,6 @@ fun LoginScreen(navController: NavController) {
                     fontSize = 14.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                     modifier = Modifier.clickable {
-                        // Limpiar campos y cambiar modo
                         isRegistering = !isRegistering
                         email = ""
                         password = ""
@@ -197,7 +202,7 @@ fun LoginScreen(navController: NavController) {
     }
 }
 
-// Función auxiliar para no repetir colores
+// esto es para no repetir los colores
 @Composable
 fun customTextFieldColors() = TextFieldDefaults.colors(
     focusedContainerColor = Color(0xFF1A1C29),
@@ -207,3 +212,8 @@ fun customTextFieldColors() = TextFieldDefaults.colors(
     focusedIndicatorColor = Color(0xFF4A80FF),
     unfocusedIndicatorColor = Color.Gray
 )
+
+// validacion para el email
+fun isEmailValid(email: String): Boolean {
+    return android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
+}

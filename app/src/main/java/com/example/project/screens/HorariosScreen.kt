@@ -27,19 +27,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.project.HorariosEntity
+import com.example.project.ParkingDatabase
+import kotlinx.coroutines.launch
 import java.util.Calendar
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HorariosScreen(navController: NavController) {
+fun HorariosScreen(navController: NavController, userEmail: String) {
 
-    val listaHorarios = HorariosManager.listaHorarios
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val db = remember { ParkingDatabase.getDatabase(context) }
+
+    val listaHorarios = remember { mutableStateListOf<HorariosEntity>() }
 
     var mostrarFormulario by remember { mutableStateOf(false) }
-
     var nuevoNombre by remember { mutableStateOf("") }
     var nuevaApertura by remember { mutableStateOf("09:00 AM") }
     var nuevaCierre by remember { mutableStateOf("05:00 PM") }
     val nuevosDias = remember { mutableStateListOf<String>() }
+
+    LaunchedEffect(userEmail) {
+        val horariosGuardados = db.dao().getUserHorarios(userEmail)
+        listaHorarios.clear()
+        listaHorarios.addAll(horariosGuardados)
+    }
 
     Scaffold(
         containerColor = Color(0xFF0F111A),
@@ -90,7 +102,19 @@ fun HorariosScreen(navController: NavController) {
                     .padding(bottom = if (mostrarFormulario) 400.dp else 80.dp)
             ) {
                 listaHorarios.forEach { horario ->
-                    HorarioItem(horario)
+                    HorarioItem(
+                        horario = horario,
+                        onToggle = {nuevoEstado ->
+                            scope.launch {
+                                val itemActualizado = horario.copy(activo = nuevoEstado)
+                                db.dao().updateHorario(itemActualizado)
+
+                                val actualizados = db.dao().getUserHorarios(userEmail)
+                                listaHorarios.clear()
+                                listaHorarios.addAll(actualizados)
+                            }
+                        }
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
                 }
             }
@@ -187,15 +211,21 @@ fun HorariosScreen(navController: NavController) {
                             Button(
                                 onClick = {
                                     // guardar
-                                    val nombreFinal = nuevoNombre.ifEmpty { "Horario Personalizado" }
-                                    val nuevoHorario = HorarioData(
+                                    val nombreFinal = nuevoNombre.ifEmpty { "Personalizado" }
+                                    val nuevoHorario = HorariosEntity(
+                                        userEmail = userEmail,
                                         nombre = nombreFinal,
                                         apertura = nuevaApertura,
                                         cierre = nuevaCierre,
-                                        dias = nuevosDias.toList(),
+                                        dias = nuevosDias.joinToString(","),
                                         activo = true
                                     )
-                                    listaHorarios.add(nuevoHorario)
+                                    scope.launch {
+                                        db.dao().insertHorario(nuevoHorario)
+                                        val actualizados = db.dao().getUserHorarios(userEmail)
+                                        listaHorarios.clear()
+                                        listaHorarios.addAll(actualizados)
+                                    }
 
                                     // se limpia el campo y se cierra la ventana
                                     nuevoNombre = ""
@@ -217,11 +247,12 @@ fun HorariosScreen(navController: NavController) {
 }
 
 @Composable
-fun HorarioItem(horario: HorarioData) {
+fun HorarioItem(
+    horario: HorariosEntity,
+    onDelete: () -> Unit = {},
+    onToggle: (Boolean) -> Unit
+) {
     var isActive by remember { mutableStateOf(horario.activo) }
-
-    // se formatean los dias para que se vean asi (L, M, X)
-    val diasTexto = if (horario.dias.isEmpty()) "Sin días" else horario.dias.joinToString(", ")
 
     Surface(
         color = Color(0xFF151722),
@@ -246,15 +277,17 @@ fun HorarioItem(horario: HorarioData) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(horario.nombre, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "Abre: ${horario.apertura} - Cierra: ${horario.cierre} | $diasTexto",
+                    "Abre: ${horario.apertura} - Cierra: ${horario.cierre} | ${horario.dias}",
                     color = Color.Gray,
                     fontSize = 12.sp
                 )
             }
 
             Switch(
-                checked = isActive,
-                onCheckedChange = { isActive = it },
+                checked = horario.activo,
+                onCheckedChange = { isChecked ->
+                    onToggle(isChecked)
+                },
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,
                     checkedTrackColor = Color(0xFF4A80FF),
