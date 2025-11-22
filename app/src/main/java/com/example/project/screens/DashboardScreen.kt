@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material.icons.rounded.History
@@ -41,6 +42,8 @@ fun DashboardScreen(navController: NavController, emailUsuario: String) {
 
     // estado para que se guarde el nombre del usuario que viene de la bd
     var nombreUsuario by remember { mutableStateOf("Cargando...") }
+
+    var mostrarMenu by remember { mutableStateOf(false) }
 
     // recordatorio
     var textoTituloRecordatorio by remember { mutableStateOf("Buscando horarios...") }
@@ -96,11 +99,37 @@ fun DashboardScreen(navController: NavController, emailUsuario: String) {
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
-                Icon(
-                    imageVector = Icons.Rounded.Settings,
-                    contentDescription = "Configuración",
-                    tint = Color.White
-                )
+                Box {
+                    IconButton(onClick = { mostrarMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Rounded.Settings,
+                            contentDescription = "Configuración",
+                            tint = Color.White
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = mostrarMenu,
+                        onDismissRequest = { mostrarMenu = false },
+                        modifier = Modifier.background(Color(0xFF1A1C29))
+                    ){
+                        DropdownMenuItem(
+                            text = { Text("Cerrar Sesión", color = Color.White) },
+                            onClick = {
+                                mostrarMenu = false
+                                navController.navigate(AppScreen.Login.route) {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEF4444)
+                                )
+                            }
+                        )
+                    }
+                }
             }
         }
     ) { innerPadding ->

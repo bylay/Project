@@ -10,10 +10,14 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -28,10 +32,11 @@ import com.example.project.AccesoEntity
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BloquearScreen(navController: NavController, emailUsuario: String) {
-    var isLocked = BarreraData.getEstado(emailUsuario)
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val db = remember { ParkingDatabase.getDatabase(context) }
+    var isLocked by remember { mutableStateOf(true) }
 
     Scaffold(
         containerColor = Color(0xFF0F111A),
@@ -58,6 +63,7 @@ fun BloquearScreen(navController: NavController, emailUsuario: String) {
             Box(
                 modifier = Modifier
                     .size(200.dp)
+                    .clip(CircleShape)
                     .background(
                         color = if (isLocked) Color(0xFF2A151A) else Color(0xFF152A1A), // rojo oscuro o verde oscuro
                         shape = CircleShape
@@ -89,6 +95,7 @@ fun BloquearScreen(navController: NavController, emailUsuario: String) {
                 onClick = {
                     val nuevoEstado = !isLocked
                     isLocked = nuevoEstado
+
 
                     if (!nuevoEstado) {
                         scope.launch {
