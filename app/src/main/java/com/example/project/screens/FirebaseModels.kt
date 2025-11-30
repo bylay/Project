@@ -32,3 +32,7 @@ data class AccesoFirestore(
         return sdf.format(java.util.Date(timestamp))
     }
 }
+
+data class ConfiguracionFirestore(
+    val distanciaActivacion: Int = 10
+)

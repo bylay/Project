@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -26,8 +27,6 @@ import com.example.project.Navigator.AppScreen
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
-
-
 @Composable
 fun DashboardScreen(navController: NavController, emailUsuario: String) {
     val db = FirebaseFirestore.getInstance()
@@ -35,10 +34,12 @@ fun DashboardScreen(navController: NavController, emailUsuario: String) {
     var nombreUsuario by remember { mutableStateOf("Cargando...") }
     var textoTituloRecordatorio by remember { mutableStateOf("Buscando horarios...") }
     var textoDetalleRecordatorio by remember { mutableStateOf("...") }
+
     var mostrarMenu by remember { mutableStateOf(false) }
+    var mostrarDialogoDistancia by remember { mutableStateOf(false) }
+    var distanciaSlider by remember { mutableFloatStateOf(10f) }
 
     LaunchedEffect(emailUsuario) {
-        // obtener nombre desde la colección "usuarios"
         db.collection("usuarios").document(emailUsuario).get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
@@ -46,7 +47,6 @@ fun DashboardScreen(navController: NavController, emailUsuario: String) {
                 }
             }
 
-        // obtener horarios desde la colección "horarios"
         db.collection("horarios")
             .whereEqualTo("userEmail", emailUsuario)
             .get()
@@ -65,16 +65,17 @@ fun DashboardScreen(navController: NavController, emailUsuario: String) {
                         textoTituloRecordatorio = "Configura tu Parking"
                         textoDetalleRecordatorio = "Aún no tienes horarios definidos."
                     }
-                } catch (e: Exception) {
-                    // SI FALLA, NO CRASHEA, SOLO AVISA
-                    textoTituloRecordatorio = "Error de datos"
-                    textoDetalleRecordatorio = "Revisa tu conexión o base de datos."
-                    e.printStackTrace()
-                }
+                } catch (e: Exception) { e.printStackTrace() }
             }
-            .addOnFailureListener {
-                textoTituloRecordatorio = "Error de red"
-                textoDetalleRecordatorio = "No se pudieron cargar los datos."
+
+        db.collection("configuracion").document(emailUsuario).get()
+            .addOnSuccessListener { document ->
+                if (document.exists()) {
+                    val config = document.toObject(ConfiguracionFirestore::class.java)
+                    if (config != null) {
+                        distanciaSlider = config.distanciaActivacion.toFloat()
+                    }
+                }
             }
     }
 
@@ -85,7 +86,6 @@ fun DashboardScreen(navController: NavController, emailUsuario: String) {
                 Text("P", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Text("Smart Parking", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
 
-                // Menú Cerrar Sesión
                 Box {
                     IconButton(onClick = { mostrarMenu = true }) {
                         Icon(Icons.Rounded.Settings, contentDescription = "Config", tint = Color.White)
@@ -96,10 +96,21 @@ fun DashboardScreen(navController: NavController, emailUsuario: String) {
                         modifier = Modifier.background(Color(0xFF1A1C29))
                     ) {
                         DropdownMenuItem(
+                            text = { Text("Distancia Activación", color = Color.White) },
+                            onClick = {
+                                mostrarMenu = false
+                                mostrarDialogoDistancia = true
+                            },
+                            leadingIcon = { Icon(Icons.Default.SettingsInputAntenna, null, tint = Color(0xFF4A80FF)) }
+                        )
+
+                        HorizontalDivider(color = Color.Gray, thickness = 0.5.dp)
+
+                        DropdownMenuItem(
                             text = { Text("Cerrar Sesión", color = Color.White) },
                             onClick = {
                                 mostrarMenu = false
-                                FirebaseAuth.getInstance().signOut() // Cerrar en Firebase
+                                FirebaseAuth.getInstance().signOut()
                                 navController.navigate(AppScreen.Login.route) { popUpTo(0) { inclusive = true } }
                             },
                             leadingIcon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, null, tint = Color(0xFFEF4444)) }
@@ -115,7 +126,6 @@ fun DashboardScreen(navController: NavController, emailUsuario: String) {
             Text("Gestiona tu parking fácilmente.", fontSize = 16.sp, color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Tarjeta Recordatorio
             Surface(color = Color(0xFF152238), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Color(0xFF1E3A8A)), modifier = Modifier.fillMaxWidth()) {
                 Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
                     Icon(Icons.Outlined.Info, null, tint = Color(0xFF4A80FF), modifier = Modifier.size(24.dp))
@@ -129,63 +139,87 @@ fun DashboardScreen(navController: NavController, emailUsuario: String) {
             }
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Botones de navegación
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                DashboardCard(
-                    title = "Bloqueo de Barrera",
-                    subtitle = "Control manual",
-                    icon = Icons.Rounded.DirectionsCar,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        navController.navigate(AppScreen.BloquearBarrera.crearRuta(emailUsuario))
-                    }
-                )
-                DashboardCard(
-                    title = "Configurar Horarios",
-                    subtitle = "Define los horarios",
-                    icon = Icons.Rounded.Today,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        navController.navigate(AppScreen.Horarios.crearRuta(emailUsuario))
-                    }
-                )
+                DashboardCard("Bloqueo de Barrera", "Control manual", Icons.Rounded.DirectionsCar, Modifier.weight(1f)) {
+                    navController.navigate(AppScreen.BloquearBarrera.crearRuta(emailUsuario))
+                }
+                DashboardCard("Configurar Horarios", "Define los horarios", Icons.Rounded.Today, Modifier.weight(1f)) {
+                    navController.navigate(AppScreen.Horarios.crearRuta(emailUsuario))
+                }
             }
             Spacer(modifier = Modifier.height(16.dp))
             Row {
-                DashboardCard(
-                    title = "Historial de Accesos",
-                    subtitle = "Revisa entradas/salidas",
-                    icon = Icons.Rounded.History,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        navController.navigate(AppScreen.HistorialAcceso.route)
-                    }
-                )
+                DashboardCard("Historial de Accesos", "Revisa entradas/salidas", Icons.Rounded.History, Modifier.weight(1f)) {
+                    navController.navigate(AppScreen.HistorialAcceso.route)
+                }
                 Spacer(modifier = Modifier.weight(1f))
             }
+        }
+
+        if (mostrarDialogoDistancia) {
+            AlertDialog(
+                onDismissRequest = { mostrarDialogoDistancia = false },
+                containerColor = Color(0xFF1A1C29),
+                title = { Text("Distancia de Activación", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text(
+                            text = "Define a qué distancia se activa la barrera automática.",
+                            color = Color.Gray,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = "${distanciaSlider.toInt()} metros",
+                            color = Color(0xFF4A80FF),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 24.sp,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Slider(
+                            value = distanciaSlider,
+                            onValueChange = { distanciaSlider = it },
+                            valueRange = 0f..50f,
+                            steps = 49,
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(0xFF4A80FF),
+                                activeTrackColor = Color(0xFF4A80FF),
+                                inactiveTrackColor = Color.Gray
+                            )
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val nuevaConfig = ConfiguracionFirestore(distanciaActivacion = distanciaSlider.toInt())
+                            db.collection("configuracion").document(emailUsuario).set(nuevaConfig)
+                            mostrarDialogoDistancia = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                    ) {
+                        Text("Guardar", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { mostrarDialogoDistancia = false }) {
+                        Text("Cancelar", color = Color.Gray)
+                    }
+                }
+            )
         }
     }
 }
 
 @Composable
-fun DashboardCard(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-    content: @Composable () -> Unit = {}
-) {
-    Surface(
-        color = Color(0xFF1A1C29),
-        shape = RoundedCornerShape(16.dp),
-        modifier = modifier
-            .clickable { onClick() }
-            .height(IntrinsicSize.Min)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+fun DashboardCard(title: String, subtitle: String, icon: ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Surface(color = Color(0xFF1A1C29), shape = RoundedCornerShape(16.dp), modifier = modifier.clickable { onClick() }.height(IntrinsicSize.Min)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            ->
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -193,32 +227,12 @@ fun DashboardCard(
                     .background(Color(0xFF24293D)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = Color(0xFF4A80FF)
-                )
+                Icon(icon, null, tint = Color(0xFF4A80FF))
             }
-
             Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = title,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-
+            Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = subtitle,
-                color = Color.Gray,
-                fontSize = 12.sp,
-                lineHeight = 16.sp
-            )
-
-            content()
+            Text(subtitle, color = Color.Gray, fontSize = 12.sp, lineHeight = 16.sp)
         }
     }
 }
