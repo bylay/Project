@@ -10,6 +10,7 @@ import com.example.project.ui.theme.ProjectTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        NotificationHelper.crearCanal(this)
         enableEdgeToEdge()
         setContent {
             ProjectTheme {

@@ -36,3 +36,10 @@ data class AccesoFirestore(
 data class ConfiguracionFirestore(
     val distanciaActivacion: Int = 10
 )
+
+data class EstadoBarreraFirestore(
+    val estado: String = "CERRADA", // "ABIERTA" o "CERRADA"
+    val ultimoCambio: Long = 0,     // Timestamp del último movimiento
+    val tiempoCierreAutomatico: Int = 10, // Segundos para cerrar (0 = desactivado)
+    val error: String = ""          // Si hay algún error (ej: "Obstrucción")
+)
