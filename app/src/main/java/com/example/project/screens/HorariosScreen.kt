@@ -2,6 +2,7 @@ package com.example.project.screens
 
 import android.app.TimePickerDialog
 import android.widget.TimePicker
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,7 +15,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Work
+import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -27,19 +30,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.project.HorariosEntity
-import com.example.project.ParkingDatabase
-import kotlinx.coroutines.launch
+import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Calendar
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HorariosScreen(navController: NavController, userEmail: String) {
-
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val db = remember { ParkingDatabase.getDatabase(context) }
 
-    val listaHorarios = remember { mutableStateListOf<HorariosEntity>() }
+    // bd
+    val db = FirebaseFirestore.getInstance()
+
+    val listaHorarios = remember { mutableStateListOf<HorarioFirestore>() }
 
     var mostrarFormulario by remember { mutableStateOf(false) }
     var nuevoNombre by remember { mutableStateOf("") }
@@ -47,10 +49,23 @@ fun HorariosScreen(navController: NavController, userEmail: String) {
     var nuevaCierre by remember { mutableStateOf("05:00 PM") }
     val nuevosDias = remember { mutableStateListOf<String>() }
 
+    // datos firebase
     LaunchedEffect(userEmail) {
-        val horariosGuardados = db.dao().getUserHorarios(userEmail)
-        listaHorarios.clear()
-        listaHorarios.addAll(horariosGuardados)
+        db.collection("horarios")
+            .whereEqualTo("userEmail", userEmail)
+            .get()
+            .addOnSuccessListener { result ->
+                listaHorarios.clear()
+                for (document in result) {
+                    // json a kotlin
+                    val horario = document.toObject(HorarioFirestore::class.java)
+                    horario.id = document.id
+                    listaHorarios.add(horario)
+                }
+            }
+            .addOnFailureListener {
+                Toast.makeText(context, "Error al cargar horarios", Toast.LENGTH_SHORT).show()
+            }
     }
 
     Scaffold(
@@ -60,58 +75,53 @@ fun HorariosScreen(navController: NavController, userEmail: String) {
                 title = { Text("Horarios de Barrera", color = Color.White, fontSize = 18.sp) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Atrás",
-                            tint = Color.White
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White)
                     }
                 },
                 actions = {
                     IconButton(onClick = {}) {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.HelpOutline,
-                            contentDescription = "Ayuda",
-                            tint = Color.Gray
-                        )
+                        Icon(Icons.AutoMirrored.Outlined.HelpOutline, contentDescription = "Ayuda", tint = Color.Gray)
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color(
-                        0xFF0F111A))
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color(0xFF0F111A))
             )
         },
-
         floatingActionButton = {
+            // Botón flotante para abrir formulario
             if (!mostrarFormulario) {
                 FloatingActionButton(
-                    onClick = {mostrarFormulario = true}, // click y se abre la ventana
+                    onClick = { mostrarFormulario = true },
                     containerColor = Color(0xFF4A80FF),
                     contentColor = Color.White
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Agregar Horario")
+                    Icon(Icons.Default.Add, contentDescription = "Agregar")
                 }
             }
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+
             Column(
                 modifier = Modifier
                     .padding(horizontal = 16.dp)
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = if (mostrarFormulario) 400.dp else 80.dp)
             ) {
-                listaHorarios.forEach { horario ->
-                    HorarioItem(
-                        horario = horario,
-                        onToggle = {nuevoEstado ->
-                            scope.launch {
-                                val itemActualizado = horario.copy(activo = nuevoEstado)
-                                db.dao().updateHorario(itemActualizado)
-
-                                val actualizados = db.dao().getUserHorarios(userEmail)
-                                listaHorarios.clear()
-                                listaHorarios.addAll(actualizados)
+                listaHorarios.forEach { schedule ->
+                    ScheduleItem(
+                        schedule = schedule,
+                        onToggle = { nuevoEstado ->
+                            if (schedule.id.isNotEmpty()) {
+                                db.collection("horarios").document(schedule.id)
+                                    .update("activo", nuevoEstado)
+                                    .addOnSuccessListener {
+                                        // Si la nube dice OK, actualizamos la pantalla
+                                        val index = listaHorarios.indexOf(schedule)
+                                        if (index != -1) {
+                                            // .copy() para refrescar la lista visual
+                                            listaHorarios[index] = schedule.copy(activo = nuevoEstado)
+                                        }
+                                    }
                             }
                         }
                     )
@@ -124,7 +134,7 @@ fun HorariosScreen(navController: NavController, userEmail: String) {
                     modifier = Modifier
                         .fillMaxSize()
                         .background(Color.Black.copy(alpha = 0.5f))
-                        .clickable { mostrarFormulario = false } // se cierra si se toca afuera
+                        .clickable { mostrarFormulario = false }
                 )
 
                 Surface(
@@ -133,11 +143,11 @@ fun HorariosScreen(navController: NavController, userEmail: String) {
                     color = Color(0xFF1A1C29),
                     shadowElevation = 16.dp
                 ) {
-                    // se usa el clickable para evitar que los clicks pasen hacia el fondo
                     Column(modifier = Modifier.padding(24.dp).clickable(enabled = false) {}) {
 
                         Box(
-                            modifier = Modifier.width(40.dp).height(4.dp)
+                            modifier = Modifier
+                                .width(40.dp).height(4.dp)
                                 .clip(RoundedCornerShape(2.dp)).background(Color.DarkGray)
                                 .align(Alignment.CenterHorizontally)
                         )
@@ -146,7 +156,6 @@ fun HorariosScreen(navController: NavController, userEmail: String) {
                         Text("Nuevo Horario", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // input nombre
                         Text("Nombre (Opcional)", color = Color.Gray, fontSize = 12.sp)
                         OutlinedTextField(
                             value = nuevoNombre,
@@ -166,7 +175,6 @@ fun HorariosScreen(navController: NavController, userEmail: String) {
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // inputs de horas
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             TimePickerInput(
                                 label = "Hora de Apertura",
@@ -184,18 +192,17 @@ fun HorariosScreen(navController: NavController, userEmail: String) {
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // selector de dias
                         Text("Repetir en días", color = Color.Gray, fontSize = 12.sp)
                         Spacer(modifier = Modifier.height(8.dp))
                         WeekDaySelector(selectedDays = nuevosDias)
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // botones
+                        // Botones
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // Botón Cancelar
                             Button(
                                 onClick = {
-                                    // cancelar y cerrar ventana
                                     mostrarFormulario = false
                                     nuevoNombre = ""
                                     nuevosDias.clear()
@@ -208,29 +215,38 @@ fun HorariosScreen(navController: NavController, userEmail: String) {
                                 Text("Cancelar", color = Color.White)
                             }
 
+                            // Botón Guardar
                             Button(
                                 onClick = {
-                                    // guardar
+                                    // --- GUARDAR EN FIREBASE ---
                                     val nombreFinal = nuevoNombre.ifEmpty { "Personalizado" }
-                                    val nuevoHorario = HorariosEntity(
+
+                                    val nuevoHorario = HorarioFirestore(
                                         userEmail = userEmail,
                                         nombre = nombreFinal,
                                         apertura = nuevaApertura,
                                         cierre = nuevaCierre,
-                                        dias = nuevosDias.joinToString(","),
+                                        dias = nuevosDias.joinToString(","), // Lista a String "L,M,X"
                                         activo = true
                                     )
-                                    scope.launch {
-                                        db.dao().insertHorario(nuevoHorario)
-                                        val actualizados = db.dao().getUserHorarios(userEmail)
-                                        listaHorarios.clear()
-                                        listaHorarios.addAll(actualizados)
-                                    }
 
-                                    // se limpia el campo y se cierra la ventana
-                                    nuevoNombre = ""
-                                    nuevosDias.clear()
-                                    mostrarFormulario = false
+                                    db.collection("horarios")
+                                        .add(nuevoHorario)
+                                        .addOnSuccessListener { documentReference ->
+                                            // Éxito: Agregamos a la lista visual con el ID real
+                                            nuevoHorario.id = documentReference.id
+                                            listaHorarios.add(nuevoHorario)
+
+                                            Toast.makeText(context, "Horario guardado", Toast.LENGTH_SHORT).show()
+
+                                            // Limpiar y cerrar
+                                            mostrarFormulario = false
+                                            nuevoNombre = ""
+                                            nuevosDias.clear()
+                                        }
+                                        .addOnFailureListener {
+                                            Toast.makeText(context, "Error al guardar", Toast.LENGTH_SHORT).show()
+                                        }
                                 },
                                 modifier = Modifier.weight(1f).height(50.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
@@ -247,12 +263,12 @@ fun HorariosScreen(navController: NavController, userEmail: String) {
 }
 
 @Composable
-fun HorarioItem(
-    horario: HorariosEntity,
-    onDelete: () -> Unit = {},
+fun ScheduleItem(
+    schedule: HorarioFirestore,
     onToggle: (Boolean) -> Unit
 ) {
-    var isActive by remember { mutableStateOf(horario.activo) }
+    // estado local para animación rápida del switch
+    val isActive = schedule.activo
 
     Surface(
         color = Color(0xFF151722),
@@ -275,19 +291,17 @@ fun HorarioItem(
             Spacer(modifier = Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(horario.nombre, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(schedule.nombre, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "Abre: ${horario.apertura} - Cierra: ${horario.cierre} | ${horario.dias}",
+                    "Abre: ${schedule.apertura} - Cierra: ${schedule.cierre} | ${schedule.dias}",
                     color = Color.Gray,
                     fontSize = 12.sp
                 )
             }
 
             Switch(
-                checked = horario.activo,
-                onCheckedChange = { isChecked ->
-                    onToggle(isChecked)
-                },
+                checked = isActive,
+                onCheckedChange = { onToggle(it) },
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,
                     checkedTrackColor = Color(0xFF4A80FF),
@@ -320,6 +334,7 @@ fun TimePickerInput(
         calendar.get(Calendar.MINUTE),
         false
     )
+
     Column(modifier = modifier) {
         Text(label, color = Color.Gray, fontSize = 12.sp)
         OutlinedTextField(

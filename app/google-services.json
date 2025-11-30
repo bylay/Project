@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "772608527680",
+    "project_id": "smartparking-cf342",
+    "storage_bucket": "smartparking-cf342.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:772608527680:android:1b1a60503d97ff7f50fea5",
+        "android_client_info": {
+          "package_name": "com.example.project"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4Xu_bvazaOchzLnK5NWqExRvk1IrcDbk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -5,16 +5,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,17 +20,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.project.ParkingDatabase
-import kotlinx.coroutines.launch
-import com.example.project.AccesoEntity
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BloquearScreen(navController: NavController, emailUsuario: String) {
-
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val db = remember { ParkingDatabase.getDatabase(context) }
+
+    val db = FirebaseFirestore.getInstance()
+
+    // Estado visual: Bloqueada (true) o Desbloqueada (false)
     var isLocked by remember { mutableStateOf(true) }
 
     Scaffold(
@@ -45,7 +40,7 @@ fun BloquearScreen(navController: NavController, emailUsuario: String) {
                 title = { Text("Bloqueo de Barrera", color = Color.White, fontSize = 18.sp) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color(0xFF0F111A))
@@ -60,35 +55,45 @@ fun BloquearScreen(navController: NavController, emailUsuario: String) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+
             Box(
                 modifier = Modifier
                     .size(200.dp)
                     .clip(CircleShape)
                     .background(
-                        color = if (isLocked) Color(0xFF2A151A) else Color(0xFF152A1A), // rojo oscuro o verde oscuro
-                        shape = CircleShape
+                        color = if (isLocked) Color(0xFF2A151A) else Color(0xFF152A1A)
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
                     contentDescription = null,
-                    tint = if (isLocked) Color(0xFFFF3B30) else Color(0xFF34C759), // rojo brillante o verde brillante
+                    tint = if (isLocked) Color(0xFFFF3B30) else Color(0xFF34C759),
                     modifier = Modifier.size(80.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(
+                text = if (isLocked) "Barrera Bloqueada" else "Barrera Desbloqueada",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
                 text = if (isLocked)
-                    "Cuando la barrera está bloqueada, no se puede abrir ni cerrar desde la aplicación o de forma remota."
+                    "Barrera cerrada. Pulse para desbloquear y registrar acceso."
                 else
-                    "La barrera está operativa. Puedes controlarla manualmente o mediante los horarios automáticos.",
+                    "Barrera abierta. Pulse para bloquear de nuevo.",
                 color = Color.Gray,
                 fontSize = 16.sp,
-                textAlign = TextAlign.Center,
-                lineHeight = 24.sp
+                textAlign = TextAlign.Center
             )
+
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
@@ -96,28 +101,35 @@ fun BloquearScreen(navController: NavController, emailUsuario: String) {
                     val nuevoEstado = !isLocked
                     isLocked = nuevoEstado
 
-
                     if (!nuevoEstado) {
-                        scope.launch {
-                            val ultimoLog = db.dao().getLastAccesolog()
+                        db.collection("historial_accesos")
+                            .orderBy("timestamp", Query.Direction.DESCENDING)
+                            .limit(1)
+                            .get()
+                            .addOnSuccessListener { documents ->
+                                var nuevoTipo = "ENTRADA"
 
-                            val nuevoTipo = if (ultimoLog?.tipo == "ENTRADA") "SALIDA" else "ENTRADA"
+                                if (!documents.isEmpty) {
+                                    val ultimoLog = documents.documents[0].toObject(AccesoFirestore::class.java)
+                                    if (ultimoLog?.tipo == "ENTRADA") {
+                                        nuevoTipo = "SALIDA"
+                                    }
+                                }
 
-                            val nuevoLog = AccesoEntity(
-                                emailUsuario = emailUsuario,
-                                tipo = nuevoTipo,
-                                timestamp = System.currentTimeMillis(),
-                                estadoBarrera = "Abierta"
-                            )
-                            db.dao().insertAccesolog(nuevoLog)
-                        }
+                                val nuevoLog = AccesoFirestore(
+                                    emailUsuario = emailUsuario,
+                                    tipo = nuevoTipo,
+                                    timestamp = System.currentTimeMillis(),
+                                    estadoBarrera = "Abierta"
+                                )
+
+                                db.collection("historial_accesos").add(nuevoLog)
+                            }
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
+                modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isLocked) Color(0xFF2563EB) else Color(0xFF1E2230) // azul o gris
+                    containerColor = if (isLocked) Color(0xFF2563EB) else Color(0xFF2E3245)
                 ),
                 shape = RoundedCornerShape(28.dp)
             ) {
@@ -133,8 +145,8 @@ fun BloquearScreen(navController: NavController, emailUsuario: String) {
                     fontWeight = FontWeight.Bold
                 )
             }
-            Spacer(modifier = Modifier.height(32.dp))
 
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

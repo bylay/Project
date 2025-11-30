@@ -24,22 +24,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.project.AccesoEntity
-import com.example.project.ParkingDatabase
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistorialAccesoScreen(navController: NavController) {
-    val context = LocalContext.current
-    val db = remember { ParkingDatabase.getDatabase(context) }
+    val db = FirebaseFirestore.getInstance()
 
-    var listaLogs by remember { mutableStateOf(emptyList<AccesoEntity>()) }
+    var listaLogs by remember { mutableStateOf(emptyList<AccesoFirestore>()) }
 
     var textoBusqueda by remember { mutableStateOf("") }
     var filtroSeleccionado by remember { mutableStateOf("Todo") }
 
     LaunchedEffect(Unit) {
-        listaLogs = db.dao().getAllAccesolog()
+        db.collection("historial_accesos")
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .get()
+            .addOnSuccessListener { result ->
+                val logs = result.toObjects(AccesoFirestore::class.java)
+                listaLogs = logs
+            }
     }
 
     val registrosFiltrados = listaLogs.filter { log ->
@@ -59,18 +64,16 @@ fun HistorialAccesoScreen(navController: NavController) {
                 title = { Text("Historial de Entradas y Salidas", color = Color.White, fontSize = 16.sp) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Atrás",
-                            tint = Color.White
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color(0xFF0F111A))
             )
         }
-    ){ innerPadding ->
+    ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 16.dp)) {
+
+            // Barra de Búsqueda
             OutlinedTextField(
                 value = textoBusqueda,
                 onValueChange = { textoBusqueda = it },
@@ -87,6 +90,7 @@ fun HistorialAccesoScreen(navController: NavController) {
                 ),
                 shape = RoundedCornerShape(12.dp)
             )
+
             Spacer(modifier = Modifier.height(16.dp))
 
             val filtros = listOf("Todo", "Entradas", "Salidas")
@@ -97,6 +101,7 @@ fun HistorialAccesoScreen(navController: NavController) {
                     }
                 }
             }
+
             Spacer(modifier = Modifier.height(24.dp))
 
             LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -114,7 +119,7 @@ fun HistorialAccesoScreen(navController: NavController) {
 }
 
 @Composable
-fun HistorialItem(log: AccesoEntity) {
+fun HistorialItem(log: AccesoFirestore) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         val esEntrada = log.tipo == "ENTRADA"
         val colorIcono = if (esEntrada) Color(0xFF34C759) else Color(0xFFFF9500)
@@ -160,4 +165,3 @@ fun FilterChipButton(text: String, isSelected: Boolean, onClick: () -> Unit) {
         Text(text, color = Color.White, fontSize = 12.sp)
     }
 }
-
